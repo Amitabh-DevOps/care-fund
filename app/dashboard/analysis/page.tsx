@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Shield, Database, Brain, TrendingUp, CheckCircle2, Loader2, AlertTriangle } from "lucide-react"
+import { useSession, signOut } from "next-auth/react"
+import { Shield, Database, Brain, TrendingUp, CheckCircle2, Loader2, AlertTriangle, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
+import { useToast } from "@/hooks/use-toast"
 
 interface AgentStep {
   id: string
@@ -19,7 +21,10 @@ interface AgentStep {
 
 export default function AnalysisPage() {
   const router = useRouter()
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const { toast } = useToast()
+  const { data: session, status } = useSession()
+  const [profile, setProfile] = useState<any>(null)
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true)
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([
     {
       id: "1",
@@ -51,25 +56,44 @@ export default function AnalysisPage() {
   const [analysisComplete, setAnalysisComplete] = useState(false)
 
   useEffect(() => {
-    const loggedIn = localStorage.getItem("isLoggedIn")
-    const profileCompleted = localStorage.getItem("profileCompleted") === "true"
+    if (status === "loading") return
 
-    if (!loggedIn) {
+    if (status === "unauthenticated") {
       router.push("/login")
       return
     }
 
-    if (!profileCompleted) {
-      router.push("/dashboard")
-      return
+    if (session?.user) {
+      fetchProfile()
     }
+  }, [status, session, router])
 
-    setIsLoggedIn(true)
-  }, [router])
+  const fetchProfile = async () => {
+    try {
+      const response = await fetch("/api/profile")
+      const data = await response.json()
+
+      if (data.profileCompleted === false || !data.city) {
+        router.push("/dashboard")
+        return
+      }
+
+      setProfile(data)
+      setIsLoadingProfile(false)
+    } catch (error) {
+      console.error("[v0] Error fetching profile:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load profile data",
+        variant: "destructive",
+      })
+      setIsLoadingProfile(false)
+    }
+  }
 
   const runAnalysis = async () => {
+    if (!profile) return
     setIsAnalyzing(true)
-    const profile = JSON.parse(localStorage.getItem("userProfile") || "{}")
 
     // Step 1: Collector Agent
     setAgentSteps((prev) => prev.map((step, idx) => (idx === 0 ? { ...step, status: "processing" } : step)))
@@ -152,8 +176,8 @@ export default function AnalysisPage() {
       ),
     )
 
-    // Store analysis results
-    localStorage.setItem(
+    // Store analysis results in session storage (temporary)
+    sessionStorage.setItem(
       "analysisResults",
       JSON.stringify({
         riskScore,
@@ -234,11 +258,21 @@ export default function AnalysisPage() {
   }
 
   const handleLogout = () => {
-    localStorage.clear()
-    router.push("/")
+    signOut({ callbackUrl: "/" })
   }
 
-  if (!isLoggedIn) {
+  if (status === "loading" || isLoadingProfile) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-cyan-50 to-teal-50">
+        <div className="text-center">
+          <RefreshCw className="mx-auto h-8 w-8 animate-spin text-cyan-600" />
+          <p className="mt-4 text-slate-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (status === "unauthenticated" || !profile) {
     return null
   }
 

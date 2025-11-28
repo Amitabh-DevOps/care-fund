@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Shield, TrendingUp, Heart, AlertCircle, DollarSign, Calendar, Download, Home } from "lucide-react"
+import { useSession, signOut } from "next-auth/react"
+import { Shield, TrendingUp, Heart, AlertCircle, DollarSign, Calendar, Download, Home, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { useToast } from "@/hooks/use-toast"
 
 interface AnalysisResults {
   riskScore: number
@@ -22,39 +24,62 @@ interface AnalysisResults {
 
 export default function ResultsPage() {
   const router = useRouter()
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const { toast } = useToast()
+  const { data: session, status } = useSession()
   const [profile, setProfile] = useState<any>(null)
   const [results, setResults] = useState<AnalysisResults | null>(null)
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true)
 
   useEffect(() => {
-    const loggedIn = localStorage.getItem("isLoggedIn")
-    const profileCompleted = localStorage.getItem("profileCompleted") === "true"
-    const savedProfile = localStorage.getItem("userProfile")
-    const analysisResults = localStorage.getItem("analysisResults")
+    if (status === "loading") return
 
-    if (!loggedIn) {
+    if (status === "unauthenticated") {
       router.push("/login")
       return
     }
 
-    if (!profileCompleted || !savedProfile) {
-      router.push("/dashboard")
-      return
+    if (session?.user) {
+      fetchProfile()
+      loadAnalysisResults()
     }
+  }, [status, session, router])
 
+  const fetchProfile = async () => {
+    try {
+      const response = await fetch("/api/profile")
+      const data = await response.json()
+
+      if (data.profileCompleted === false || !data.city) {
+        router.push("/dashboard")
+        return
+      }
+
+      setProfile(data)
+      setIsLoadingProfile(false)
+    } catch (error) {
+      console.error("[v0] Error fetching profile:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load profile data",
+        variant: "destructive",
+      })
+      setIsLoadingProfile(false)
+    }
+  }
+
+  const loadAnalysisResults = () => {
+    const analysisResults = sessionStorage.getItem("analysisResults")
+    
     if (!analysisResults) {
       router.push("/dashboard/analysis")
       return
     }
 
-    setIsLoggedIn(true)
-    setProfile(JSON.parse(savedProfile))
     setResults(JSON.parse(analysisResults))
-  }, [router])
+  }
 
   const handleLogout = () => {
-    localStorage.clear()
-    router.push("/")
+    signOut({ callbackUrl: "/" })
   }
 
   const getRiskLevel = (score: number) => {
@@ -67,7 +92,18 @@ export default function ResultsPage() {
     return { label: "Very High Risk", color: "text-red-600", bgColor: "bg-red-50", barColor: "bg-red-500" }
   }
 
-  if (!isLoggedIn || !profile || !results) {
+  if (status === "loading" || isLoadingProfile) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-cyan-50 to-teal-50">
+        <div className="text-center">
+          <RefreshCw className="mx-auto h-8 w-8 animate-spin text-cyan-600" />
+          <p className="mt-4 text-slate-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (status === "unauthenticated" || !profile || !results) {
     return null
   }
 

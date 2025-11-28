@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useSession, signOut } from "next-auth/react"
 import { Shield, Cloud, Thermometer, Droplets, User, RefreshCw, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import { useToast } from "@/hooks/use-toast"
 
 interface EnvironmentalData {
   aqi: number
@@ -28,36 +30,64 @@ interface UserProfile {
 
 export default function ReportPage() {
   const router = useRouter()
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [userName, setUserName] = useState("")
+  const { toast } = useToast()
+  const { data: session, status } = useSession()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [envData, setEnvData] = useState<EnvironmentalData | null>(null)
   const [healthScore, setHealthScore] = useState(78)
   const [isLoadingEnv, setIsLoadingEnv] = useState(false)
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true)
 
   useEffect(() => {
-    const loggedIn = localStorage.getItem("isLoggedIn")
-    const name = localStorage.getItem("userName") || "User"
-    const profileCompleted = localStorage.getItem("profileCompleted") === "true"
-    const savedProfile = localStorage.getItem("userProfile")
+    if (status === "loading") return
 
-    if (!loggedIn) {
+    if (status === "unauthenticated") {
       router.push("/login")
       return
     }
 
-    if (!profileCompleted || !savedProfile) {
-      router.push("/dashboard")
-      return
+    if (session?.user) {
+      fetchProfile()
     }
+  }, [status, session, router])
 
-    setIsLoggedIn(true)
-    setUserName(name)
-    setProfile(JSON.parse(savedProfile))
+  const fetchProfile = async () => {
+    try {
+      const response = await fetch("/api/profile")
+      const data = await response.json()
 
-    // Fetch environmental data
-    fetchEnvironmentalData(JSON.parse(savedProfile).city)
-  }, [router])
+      if (data.profileCompleted === false || !data.city) {
+        router.push("/dashboard")
+        return
+      }
+
+      const profileData: UserProfile = {
+        name: data.name || session?.user?.name || "",
+        city: data.city || "",
+        area: data.area || "",
+        age: data.age || "",
+        healthCondition: data.healthCondition || "",
+        pastSurgery: data.pastSurgery || "",
+        addictions: data.addictions || "",
+        workShift: data.workShift || "",
+        occupation: data.occupation || "",
+      }
+
+      setProfile(profileData)
+      setIsLoadingProfile(false)
+
+      // Fetch environmental data
+      fetchEnvironmentalData(data.city)
+    } catch (error) {
+      console.error("[v0] Error fetching profile:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load profile data",
+        variant: "destructive",
+      })
+      setIsLoadingProfile(false)
+    }
+  }
 
   const fetchEnvironmentalData = async (city: string) => {
     setIsLoadingEnv(true)
@@ -92,11 +122,21 @@ export default function ReportPage() {
   }
 
   const handleLogout = () => {
-    localStorage.clear()
-    router.push("/")
+    signOut({ callbackUrl: "/" })
   }
 
-  if (!isLoggedIn || !profile) {
+  if (status === "loading" || isLoadingProfile) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-cyan-50 to-teal-50">
+        <div className="text-center">
+          <RefreshCw className="mx-auto h-8 w-8 animate-spin text-cyan-600" />
+          <p className="mt-4 text-slate-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (status === "unauthenticated" || !profile) {
     return null
   }
 
@@ -115,7 +155,7 @@ export default function ReportPage() {
             <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard")}>
               Profile
             </Button>
-            <span className="text-sm text-slate-600">Welcome, {userName}</span>
+            <span className="text-sm text-slate-600">Welcome, {session?.user?.name}</span>
             <Button variant="outline" size="sm" onClick={handleLogout}>
               Logout
             </Button>
