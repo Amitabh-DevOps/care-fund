@@ -92,25 +92,47 @@ export default function ReportPage() {
   const fetchEnvironmentalData = async (city: string) => {
     setIsLoadingEnv(true)
 
-    // Simulate API call with mock data based on city
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    try {
+      // Fetch real environmental data from our API
+      const response = await fetch(`/api/environment?city=${encodeURIComponent(city)}`)
+      
+      if (!response.ok) {
+        throw new Error("Failed to fetch environmental data")
+      }
 
-    // Mock environmental data for Indian cities
-    const mockData: Record<string, EnvironmentalData> = {
-      Mumbai: { aqi: 165, temperature: 32, humidity: 68 },
-      Delhi: { aqi: 220, temperature: 28, humidity: 55 },
-      Bangalore: { aqi: 95, temperature: 26, humidity: 60 },
-      Hyderabad: { aqi: 130, temperature: 30, humidity: 58 },
-      Chennai: { aqi: 140, temperature: 33, humidity: 75 },
-      Kolkata: { aqi: 180, temperature: 31, humidity: 70 },
-      Pune: { aqi: 110, temperature: 29, humidity: 52 },
-      Ahmedabad: { aqi: 150, temperature: 35, humidity: 45 },
-      Jaipur: { aqi: 160, temperature: 34, humidity: 40 },
-      Lucknow: { aqi: 190, temperature: 30, humidity: 62 },
+      const data = await response.json()
+      
+      setEnvData({
+        aqi: data.aqi,
+        temperature: data.temperature,
+        humidity: data.humidity,
+      })
+    } catch (error) {
+      console.error("[v0] Error fetching environmental data:", error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch environmental data. Using estimated values.",
+        variant: "destructive",
+      })
+      
+      // Fallback to estimated data
+      const fallbackData: Record<string, EnvironmentalData> = {
+        Mumbai: { aqi: 165, temperature: 32, humidity: 68 },
+        Delhi: { aqi: 220, temperature: 28, humidity: 55 },
+        Bangalore: { aqi: 95, temperature: 26, humidity: 60 },
+        Hyderabad: { aqi: 130, temperature: 30, humidity: 58 },
+        Chennai: { aqi: 140, temperature: 33, humidity: 75 },
+        Kolkata: { aqi: 180, temperature: 31, humidity: 70 },
+        Pune: { aqi: 110, temperature: 29, humidity: 52 },
+        Ahmedabad: { aqi: 150, temperature: 35, humidity: 45 },
+        Jaipur: { aqi: 160, temperature: 34, humidity: 40 },
+        Lucknow: { aqi: 190, temperature: 30, humidity: 62 },
+      }
+      
+      setEnvData(fallbackData[city] || fallbackData["Mumbai"])
+    } finally {
+      setIsLoadingEnv(false)
     }
-
-    setEnvData(mockData[city] || mockData["Mumbai"])
-    setIsLoadingEnv(false)
   }
 
   const getAQIStatus = (aqi: number) => {
@@ -219,7 +241,7 @@ export default function ReportPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-slate-900">Environmental Data</h2>
-                <p className="text-sm text-slate-600">Real-time data for {profile.city}</p>
+                <p className="text-sm text-slate-600">Live data for {profile.city}</p>
               </div>
               <Button
                 variant="outline"
