@@ -6,7 +6,8 @@ import {
   getInsurancePlan, 
   getAlternativePlans, 
   calculateMonthlySavings, 
-  calculateEmergencyFund 
+  calculateEmergencyFund,
+  calculateAffordability 
 } from "@/lib/data/insurance-plans"
 import { generateFinancialPlan, isGeminiConfigured } from "@/lib/services/gemini-service"
 import { Agent2Results, AnalysisResults } from "@/types/agents"
@@ -29,13 +30,13 @@ export async function POST(request: Request) {
     console.log("[Agent 2] Starting financial planning...")
 
     // Step 1: Get recommended insurance plan
-    const insurancePlan = getInsurancePlan(
+    const basePlan = getInsurancePlan(
       agent1Results.riskScore,
       userProfile.age,
       userProfile.occupation
     )
 
-    console.log("[Agent 2] Insurance plan selected:", insurancePlan.name)
+    console.log("[Agent 2] Insurance plan selected:", basePlan.name)
 
     // Step 2: Get alternative plans
     const alternativePlans = getAlternativePlans(
@@ -46,9 +47,42 @@ export async function POST(request: Request) {
     // Step 3: Calculate monthly savings
     const monthlySavings = calculateMonthlySavings(
       agent1Results.riskScore,
-      insurancePlan.premium,
+      basePlan.premium,
       userProfile.age
     )
+
+    // Step 3.5: Calculate affordability for all plans
+    const monthlyIncome = parseFloat(userProfile.monthlyIncome) || 50000
+    
+    // Add affordability to recommended plan
+    const recommendedPlanAffordability = calculateAffordability(
+      monthlyIncome,
+      basePlan.premium,
+      monthlySavings
+    )
+    
+    const insurancePlan = {
+      ...basePlan,
+      affordability: recommendedPlanAffordability
+    }
+
+    // Add affordability to alternative plans
+    const alternativePlansWithAffordability = alternativePlans.map(plan => {
+      const planSavings = calculateMonthlySavings(
+        agent1Results.riskScore,
+        plan.premium,
+        userProfile.age
+      )
+      const affordability = calculateAffordability(
+        monthlyIncome,
+        plan.premium,
+        planSavings
+      )
+      return {
+        ...plan,
+        affordability
+      }
+    })
 
     // Step 4: Calculate emergency fund
     const emergencyFund = calculateEmergencyFund(
@@ -139,7 +173,7 @@ export async function POST(request: Request) {
     // Compile Agent 2 results
     const agent2Results: Agent2Results = {
       insurancePlan,
-      alternativePlans,
+      alternativePlans: alternativePlansWithAffordability,
       monthlySavings,
       emergencyFund,
       yearlyHealthBudget,

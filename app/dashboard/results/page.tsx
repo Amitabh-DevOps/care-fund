@@ -3,21 +3,39 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
-import { Shield, TrendingUp, Heart, AlertCircle, DollarSign, Calendar, Download, Home, RefreshCw } from "lucide-react"
+import { Shield, TrendingUp, Heart, AlertCircle, DollarSign, Calendar, Download, Home, RefreshCw, CheckCircle2, XCircle, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
+
+interface InsurancePlan {
+  name: string
+  type: string
+  coverage: number
+  premium: number
+  features: string[]
+  advantages: string[]
+  disadvantages: string[]
+  recommended: boolean
+  affordability?: {
+    isAffordable: boolean
+    affordabilityScore: number
+    monthlyIncomePercentage: number
+    recommendation: string
+    financialStrain: "low" | "moderate" | "high" | "critical"
+  }
+}
 
 interface AnalysisResults {
   riskScore: number
   monthlySavings: number
-  insurancePlan: {
-    name: string
-    coverage: number
-    premium: number
+  insurancePlan: InsurancePlan
+  agent2Results?: {
+    alternativePlans: InsurancePlan[]
   }
   timestamp: string
 }
@@ -57,7 +75,7 @@ export default function ResultsPage() {
       setProfile(data)
       setIsLoadingProfile(false)
     } catch (error) {
-      console.error("[v0] Error fetching profile:", error)
+      console.error("[Results] Error fetching profile:", error)
       toast({
         title: "Error",
         description: "Failed to load profile data",
@@ -92,6 +110,21 @@ export default function ResultsPage() {
     return { label: "Very High Risk", color: "text-red-600", bgColor: "bg-red-50", barColor: "bg-red-500" }
   }
 
+  const getAffordabilityColor = (strain: string) => {
+    switch (strain) {
+      case "low":
+        return { bg: "bg-green-50", text: "text-green-700", border: "border-green-200" }
+      case "moderate":
+        return { bg: "bg-yellow-50", text: "text-yellow-700", border: "border-yellow-200" }
+      case "high":
+        return { bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200" }
+      case "critical":
+        return { bg: "bg-red-50", text: "text-red-700", border: "border-red-200" }
+      default:
+        return { bg: "bg-slate-50", text: "text-slate-700", border: "border-slate-200" }
+    }
+  }
+
   if (status === "loading" || isLoadingProfile) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-cyan-50 to-teal-50">
@@ -110,6 +143,7 @@ export default function ResultsPage() {
   const riskLevel = getRiskLevel(results.riskScore)
   const yearlyPremium = results.insurancePlan.premium * 12
   const yearlySavings = results.monthlySavings * 12
+  const allPlans = [results.insurancePlan, ...(results.agent2Results?.alternativePlans || [])]
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-teal-50">
@@ -133,7 +167,7 @@ export default function ResultsPage() {
       </header>
 
       <div className="container mx-auto px-4 py-8">
-        <div className="mx-auto max-w-6xl">
+        <div className="mx-auto max-w-7xl">
           {/* Report Header */}
           <div className="mb-8">
             <div className="flex items-center justify-between">
@@ -207,49 +241,234 @@ export default function ResultsPage() {
             </div>
           </Card>
 
-          {/* Financial Recommendations */}
+          {/* Insurance Options Section - NEW */}
+          <Card className="mb-6 border-cyan-200 bg-white/90 p-8 backdrop-blur-sm">
+            <div className="mb-6">
+              <h2 className="mb-2 text-2xl font-bold text-slate-900">Insurance Plan Options</h2>
+              <p className="text-slate-600">
+                Compare different insurance plans based on your income of ₹{profile.monthlyIncome ? Number(profile.monthlyIncome).toLocaleString('en-IN') : 'N/A'}/month
+              </p>
+            </div>
+
+            <Tabs defaultValue="recommended" className="w-full">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="recommended">Recommended</TabsTrigger>
+                <TabsTrigger value="all">All Plans</TabsTrigger>
+                <TabsTrigger value="comparison">Comparison</TabsTrigger>
+              </TabsList>
+
+              {/* Recommended Plan Tab */}
+              <TabsContent value="recommended" className="mt-6">
+                <div className="rounded-lg border-2 border-cyan-300 bg-gradient-to-br from-cyan-50 to-teal-50 p-6">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div>
+                      <Badge className="mb-2 bg-cyan-600">Recommended for You</Badge>
+                      <h3 className="text-2xl font-bold text-slate-900">{results.insurancePlan.name}</h3>
+                      <p className="text-sm text-slate-600">{results.insurancePlan.type} Plan</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-slate-600">Monthly Premium</p>
+                      <p className="text-3xl font-bold text-cyan-600">₹{results.insurancePlan.premium.toLocaleString()}</p>
+                    </div>
+                  </div>
+
+                  <Separator className="my-4" />
+
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <div>
+                      <h4 className="mb-3 font-semibold text-slate-900">Coverage Details</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-slate-600">Coverage Amount:</span>
+                          <span className="font-semibold">₹{results.insurancePlan.coverage.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-600">Yearly Premium:</span>
+                          <span className="font-semibold">₹{yearlyPremium.toLocaleString()}</span>
+                        </div>
+                      </div>
+
+                      <h4 className="mb-3 mt-4 font-semibold text-slate-900">Key Features</h4>
+                      <ul className="space-y-2">
+                        {results.insurancePlan.features.slice(0, 4).map((feature, idx) => (
+                          <li key={idx} className="flex items-start gap-2 text-sm text-slate-600">
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-cyan-600" />
+                            <span>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div>
+                      {results.insurancePlan.affordability && (
+                        <div className={`mb-4 rounded-lg border p-4 ${getAffordabilityColor(results.insurancePlan.affordability.financialStrain).bg} ${getAffordabilityColor(results.insurancePlan.affordability.financialStrain).border}`}>
+                          <div className="mb-2 flex items-center justify-between">
+                            <h4 className="font-semibold text-slate-900">Affordability Analysis</h4>
+                            <Badge variant="outline" className={getAffordabilityColor(results.insurancePlan.affordability.financialStrain).text}>
+                              {results.insurancePlan.affordability.monthlyIncomePercentage}% of income
+                            </Badge>
+                          </div>
+                          <Progress value={results.insurancePlan.affordability.affordabilityScore} className="mb-2 h-2" />
+                          <p className="text-sm text-slate-700">{results.insurancePlan.affordability.recommendation}</p>
+                        </div>
+                      )}
+
+                      <h4 className="mb-3 font-semibold text-slate-900">Advantages</h4>
+                      <ul className="mb-4 space-y-2">
+                        {results.insurancePlan.advantages.slice(0, 3).map((adv, idx) => (
+                          <li key={idx} className="flex items-start gap-2 text-sm text-slate-600">
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-green-600" />
+                            <span>{adv}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* All Plans Tab */}
+              <TabsContent value="all" className="mt-6">
+                <div className="grid gap-6 md:grid-cols-3">
+                  {allPlans.map((plan, idx) => (
+                    <Card key={idx} className={`p-6 ${plan.recommended ? 'border-2 border-cyan-400' : 'border-slate-200'}`}>
+                      {plan.recommended && (
+                        <Badge className="mb-3 bg-cyan-600">Recommended</Badge>
+                      )}
+                      <h3 className="mb-1 text-xl font-bold text-slate-900">{plan.name}</h3>
+                      <p className="mb-4 text-sm text-slate-600">{plan.type} Plan</p>
+
+                      <div className="mb-4 rounded-lg bg-slate-50 p-3">
+                        <p className="text-sm text-slate-600">Monthly Premium</p>
+                        <p className="text-2xl font-bold text-cyan-600">₹{plan.premium.toLocaleString()}</p>
+                        <p className="text-xs text-slate-500">Coverage: ₹{plan.coverage.toLocaleString()}</p>
+                      </div>
+
+                      {plan.affordability && (
+                        <div className={`mb-4 rounded-lg p-3 ${getAffordabilityColor(plan.affordability.financialStrain).bg}`}>
+                          <div className="mb-1 flex items-center justify-between">
+                            <p className="text-xs font-medium text-slate-700">Affordability</p>
+                            <p className={`text-xs font-semibold ${getAffordabilityColor(plan.affordability.financialStrain).text}`}>
+                              {plan.affordability.monthlyIncomePercentage}%
+                            </p>
+                          </div>
+                          <Progress value={plan.affordability.affordabilityScore} className="h-1.5" />
+                        </div>
+                      )}
+
+                      <Separator className="my-4" />
+
+                      <div className="space-y-3">
+                        <div>
+                          <h4 className="mb-2 text-sm font-semibold text-green-700">Advantages</h4>
+                          <ul className="space-y-1">
+                            {plan.advantages.slice(0, 2).map((adv, i) => (
+                              <li key={i} className="flex items-start gap-1.5 text-xs text-slate-600">
+                                <CheckCircle2 className="mt-0.5 h-3 w-3 flex-shrink-0 text-green-600" />
+                                <span>{adv}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div>
+                          <h4 className="mb-2 text-sm font-semibold text-red-700">Disadvantages</h4>
+                          <ul className="space-y-1">
+                            {plan.disadvantages.slice(0, 2).map((dis, i) => (
+                              <li key={i} className="flex items-start gap-1.5 text-xs text-slate-600">
+                                <XCircle className="mt-0.5 h-3 w-3 flex-shrink-0 text-red-600" />
+                                <span>{dis}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              </TabsContent>
+
+              {/* Comparison Tab */}
+              <TabsContent value="comparison" className="mt-6">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b-2 border-slate-200">
+                        <th className="p-4 text-left text-sm font-semibold text-slate-900">Feature</th>
+                        {allPlans.map((plan, idx) => (
+                          <th key={idx} className="p-4 text-center text-sm font-semibold text-slate-900">
+                            {plan.name}
+                            {plan.recommended && <Badge className="ml-2 bg-cyan-600 text-xs">Recommended</Badge>}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-slate-100">
+                        <td className="p-4 text-sm font-medium text-slate-700">Monthly Premium</td>
+                        {allPlans.map((plan, idx) => (
+                          <td key={idx} className="p-4 text-center text-sm font-semibold text-cyan-600">
+                            ₹{plan.premium.toLocaleString()}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr className="border-b border-slate-100">
+                        <td className="p-4 text-sm font-medium text-slate-700">Coverage Amount</td>
+                        {allPlans.map((plan, idx) => (
+                          <td key={idx} className="p-4 text-center text-sm text-slate-600">
+                            ₹{plan.coverage.toLocaleString()}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr className="border-b border-slate-100">
+                        <td className="p-4 text-sm font-medium text-slate-700">Affordability Score</td>
+                        {allPlans.map((plan, idx) => (
+                          <td key={idx} className="p-4 text-center">
+                            {plan.affordability && (
+                              <div className="flex flex-col items-center gap-1">
+                                <span className={`text-sm font-semibold ${getAffordabilityColor(plan.affordability.financialStrain).text}`}>
+                                  {plan.affordability.affordabilityScore}/100
+                                </span>
+                                <span className="text-xs text-slate-500">
+                                  {plan.affordability.monthlyIncomePercentage}% of income
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr className="border-b border-slate-100">
+                        <td className="p-4 text-sm font-medium text-slate-700">Plan Type</td>
+                        {allPlans.map((plan, idx) => (
+                          <td key={idx} className="p-4 text-center text-sm text-slate-600">
+                            {plan.type}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr className="border-b border-slate-100">
+                        <td className="p-4 text-sm font-medium text-slate-700">Key Advantages</td>
+                        {allPlans.map((plan, idx) => (
+                          <td key={idx} className="p-4">
+                            <ul className="space-y-1 text-left text-xs text-slate-600">
+                              {plan.advantages.slice(0, 2).map((adv, i) => (
+                                <li key={i} className="flex items-start gap-1">
+                                  <CheckCircle2 className="mt-0.5 h-3 w-3 flex-shrink-0 text-green-600" />
+                                  <span>{adv}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </Card>
+
+          {/* Savings Plan */}
           <div className="mb-6 grid gap-6 md:grid-cols-2">
-            {/* Insurance Plan */}
-            <Card className="border-cyan-200 bg-white/90 p-6 backdrop-blur-sm">
-              <div className="mb-4 flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-cyan-100">
-                  <Shield className="h-6 w-6 text-cyan-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-slate-900">Recommended Insurance</h3>
-                  <p className="text-sm text-slate-600">Tailored to your risk profile</p>
-                </div>
-              </div>
-
-              <div className="mb-4 rounded-lg bg-gradient-to-br from-cyan-50 to-teal-50 p-4">
-                <h4 className="mb-2 text-lg font-bold text-slate-900">{results.insurancePlan.name}</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-600">Coverage Amount</span>
-                    <span className="font-semibold text-slate-900">
-                      ₹{results.insurancePlan.coverage.toLocaleString()}
-                    </span>
-                  </div>
-                  <Separator />
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-600">Monthly Premium</span>
-                    <span className="font-semibold text-cyan-600">
-                      ₹{results.insurancePlan.premium.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-600">Yearly Premium</span>
-                    <span className="font-semibold text-slate-900">₹{yearlyPremium.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
-
-              <Badge className="w-full justify-center bg-cyan-100 py-2 text-cyan-800">
-                Comprehensive Coverage Recommended
-              </Badge>
-            </Card>
-
-            {/* Savings Plan */}
             <Card className="border-teal-200 bg-white/90 p-6 backdrop-blur-sm">
               <div className="mb-4 flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-teal-100">
@@ -284,6 +503,43 @@ export default function ResultsPage() {
                 <Calendar className="mr-2 h-4 w-4" />
                 Auto-Debit Coming Soon
               </Badge>
+            </Card>
+
+            {/* Income-Based Recommendation */}
+            <Card className="border-cyan-200 bg-white/90 p-6 backdrop-blur-sm">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-cyan-100">
+                  <Info className="h-6 w-6 text-cyan-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-900">Financial Recommendation</h3>
+                  <p className="text-sm text-slate-600">Based on your income</p>
+                </div>
+              </div>
+
+              {results.insurancePlan.affordability && (
+                <div className="space-y-4">
+                  <div className="rounded-lg bg-slate-50 p-4">
+                    <p className="mb-2 text-sm font-medium text-slate-700">Total Monthly Commitment</p>
+                    <p className="text-2xl font-bold text-slate-900">
+                      ₹{(results.insurancePlan.premium + results.monthlySavings).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {results.insurancePlan.affordability.monthlyIncomePercentage}% of your monthly income
+                    </p>
+                  </div>
+
+                  <div className={`rounded-lg border p-4 ${getAffordabilityColor(results.insurancePlan.affordability.financialStrain).bg} ${getAffordabilityColor(results.insurancePlan.affordability.financialStrain).border}`}>
+                    <p className="mb-2 text-sm font-semibold text-slate-900">Financial Strain Level</p>
+                    <Badge className={`mb-3 ${getAffordabilityColor(results.insurancePlan.affordability.financialStrain).bg} ${getAffordabilityColor(results.insurancePlan.affordability.financialStrain).text}`}>
+                      {results.insurancePlan.affordability.financialStrain.toUpperCase()}
+                    </Badge>
+                    <p className="text-sm text-slate-700">
+                      {results.insurancePlan.affordability.recommendation}
+                    </p>
+                  </div>
+                </div>
+              )}
             </Card>
           </div>
 

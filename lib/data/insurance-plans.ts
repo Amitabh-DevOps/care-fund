@@ -7,6 +7,8 @@ export interface InsurancePlanTemplate {
   maxCoverage: number
   basePremium: number
   features: string[]
+  advantages: string[]
+  disadvantages: string[]
   suitableFor: string[]
   riskRange: {
     min: number
@@ -28,6 +30,22 @@ export const INSURANCE_PLANS: InsurancePlanTemplate[] = [
       "Ambulance charges",
       "Room rent (shared/semi-private)",
       "Annual health check-up"
+    ],
+    advantages: [
+      "Most affordable premium - ideal for budget-conscious individuals",
+      "Covers essential medical emergencies and hospitalization",
+      "Quick claim settlement process",
+      "No medical tests required for young, healthy individuals",
+      "Tax benefits under Section 80D",
+      "Suitable for those with low health risks"
+    ],
+    disadvantages: [
+      "Limited coverage amount may not be sufficient for major illnesses",
+      "Room rent restrictions (shared/semi-private only)",
+      "Pre-existing diseases not covered initially",
+      "No coverage for advanced treatments",
+      "Limited network of hospitals",
+      "No international coverage"
     ],
     suitableFor: [
       "Young professionals",
@@ -55,6 +73,24 @@ export const INSURANCE_PLANS: InsurancePlanTemplate[] = [
       "No claim bonus (up to 50%)",
       "Worldwide emergency coverage",
       "Organ donor expenses"
+    ],
+    advantages: [
+      "Balanced coverage with reasonable premium",
+      "Private room facility for better comfort",
+      "Pre-existing disease coverage after waiting period",
+      "Critical illness protection included",
+      "No claim bonus rewards healthy lifestyle",
+      "Worldwide emergency coverage for travelers",
+      "Suitable for families with optional maternity coverage",
+      "Wide network of cashless hospitals"
+    ],
+    disadvantages: [
+      "Higher premium compared to basic plans",
+      "2-year waiting period for pre-existing diseases",
+      "Room rent may have sub-limits",
+      "Some advanced treatments may require co-payment",
+      "Maternity coverage comes with additional cost",
+      "May not cover all alternative treatments"
     ],
     suitableFor: [
       "Mid-career professionals",
@@ -85,6 +121,26 @@ export const INSURANCE_PLANS: InsurancePlanTemplate[] = [
       "Second medical opinion",
       "No room rent capping",
       "Restoration of sum insured"
+    ],
+    advantages: [
+      "Highest coverage amount for major medical expenses",
+      "Immediate pre-existing disease coverage - no waiting period",
+      "Deluxe room with no rent capping",
+      "Comprehensive mental health coverage",
+      "Alternative treatment options (Ayurveda, Homeopathy)",
+      "International treatment coverage",
+      "Home healthcare and wellness programs",
+      "Sum insured restoration benefit",
+      "Priority claim settlement",
+      "Dedicated relationship manager"
+    ],
+    disadvantages: [
+      "Significantly higher premium cost",
+      "May require detailed medical examination",
+      "Not affordable for lower income groups",
+      "Some benefits may have usage limits",
+      "Complex policy terms and conditions",
+      "Higher documentation requirements for claims"
     ],
     suitableFor: [
       "High-risk occupations",
@@ -133,6 +189,8 @@ export function getInsurancePlan(riskScore: number, age: number, occupation: str
     coverage: coverage,
     premium: premium,
     features: plan.features,
+    advantages: plan.advantages,
+    disadvantages: plan.disadvantages,
     recommended: true
   }
 }
@@ -164,6 +222,8 @@ export function getAlternativePlans(riskScore: number, age: number) {
         coverage: coverage,
         premium: premium,
         features: plan.features,
+        advantages: plan.advantages,
+        disadvantages: plan.disadvantages,
         recommended: false
       }
     })
@@ -201,4 +261,67 @@ export function calculateEmergencyFund(monthlySavings: number, riskScore: number
   }
   
   return monthlySavings * months
+}
+
+export interface AffordabilityAnalysis {
+  isAffordable: boolean
+  affordabilityScore: number // 0-100
+  monthlyIncomePercentage: number
+  recommendation: string
+  financialStrain: "low" | "moderate" | "high" | "critical"
+}
+
+export function calculateAffordability(
+  monthlyIncome: number,
+  premium: number,
+  monthlySavings: number
+): AffordabilityAnalysis {
+  const totalMonthlyCommitment = premium + monthlySavings
+  const incomePercentage = (totalMonthlyCommitment / monthlyIncome) * 100
+  
+  // Calculate affordability score (100 = very affordable, 0 = not affordable)
+  let affordabilityScore = 100
+  let financialStrain: "low" | "moderate" | "high" | "critical" = "low"
+  let recommendation = ""
+  let isAffordable = true
+  
+  if (incomePercentage <= 10) {
+    affordabilityScore = 100
+    financialStrain = "low"
+    recommendation = "Excellent affordability. You can comfortably manage this plan with room for additional savings."
+    isAffordable = true
+  } else if (incomePercentage <= 15) {
+    affordabilityScore = 85
+    financialStrain = "low"
+    recommendation = "Good affordability. This plan fits well within your budget with minimal financial strain."
+    isAffordable = true
+  } else if (incomePercentage <= 20) {
+    affordabilityScore = 70
+    financialStrain = "moderate"
+    recommendation = "Moderate affordability. This plan is manageable but will require careful budgeting."
+    isAffordable = true
+  } else if (incomePercentage <= 25) {
+    affordabilityScore = 50
+    financialStrain = "moderate"
+    recommendation = "Stretching your budget. Consider a lower-tier plan or reduce savings amount temporarily."
+    isAffordable = true
+  } else if (incomePercentage <= 30) {
+    affordabilityScore = 30
+    financialStrain = "high"
+    recommendation = "High financial strain. Strongly recommend considering a more affordable plan option."
+    isAffordable = false
+  } else {
+    affordabilityScore = 10
+    financialStrain = "critical"
+    recommendation = "Not affordable. This plan exceeds recommended spending limits. Please choose a lower-tier plan."
+    isAffordable = false
+  }
+  
+  return {
+    isAffordable,
+    affordabilityScore,
+    monthlyIncomePercentage: Math.round(incomePercentage * 10) / 10,
+    recommendation,
+    financialStrain
+  }
 }

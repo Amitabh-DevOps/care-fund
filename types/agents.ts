@@ -61,7 +61,16 @@ export interface InsurancePlan {
   coverage: number
   premium: number
   features: string[]
+  advantages: string[]
+  disadvantages: string[]
   recommended: boolean
+  affordability?: {
+    isAffordable: boolean
+    affordabilityScore: number
+    monthlyIncomePercentage: number
+    recommendation: string
+    financialStrain: "low" | "moderate" | "high" | "critical"
+  }
 }
 
 export interface FinancialRecommendation {
